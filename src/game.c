@@ -72,6 +72,9 @@ void init_players(int count) {
         local_players[i].deaths        = 0;
         local_players[i].just_fired    = false;
         local_players[i].just_died     = false;
+        local_players[i].jump_z        = 0.0f;
+        local_players[i].jump_vel      = 0.0f;
+        local_players[i].is_sprinting  = false;
     }
     for (int i = 0; i < MAX_BULLETS; i++)
         bullets[i].active = false;
@@ -197,25 +200,31 @@ void update_bullets(void) {
 void update_player(int idx, joypad_buttons_t btn, joypad_inputs_t inp) {
     const float THRESHOLD  = 10.0f;
     const float MOVE_SCALE = 0.003f;
+    const float STEP_SIZE  = 0.05f;
+
+    /* B held = sprint */
+    bool sprinting = inp.btn.b;
+    float spd = sprinting ? SPRINT_FACTOR : 1.0f;
+    local_players[idx].is_sprinting = sprinting;
 
     bool moving = false;
 
     if (inp.stick_y > THRESHOLD) {
-        move_at_angle(idx, local_players[idx].angle, inp.stick_y * MOVE_SCALE);
+        move_at_angle(idx, local_players[idx].angle, inp.stick_y * MOVE_SCALE * spd);
         moving = true;
     } else if (inp.stick_y < -THRESHOLD) {
-        move_at_angle(idx, local_players[idx].angle + M_PI, (-inp.stick_y) * MOVE_SCALE);
+        move_at_angle(idx, local_players[idx].angle + M_PI, (-inp.stick_y) * MOVE_SCALE * spd);
         moving = true;
     }
 
     /* Stick X — strafe left/right */
     if (inp.stick_x > THRESHOLD) {
         move_at_angle(idx, local_players[idx].angle + (M_PI / 2.0f),
-                      inp.stick_x * MOVE_SCALE);
+                      inp.stick_x * MOVE_SCALE * spd);
         moving = true;
     } else if (inp.stick_x < -THRESHOLD) {
         move_at_angle(idx, local_players[idx].angle - (M_PI / 2.0f),
-                      (-inp.stick_x) * MOVE_SCALE);
+                      (-inp.stick_x) * MOVE_SCALE * spd);
         moving = true;
     }
 
@@ -223,14 +232,25 @@ void update_player(int idx, joypad_buttons_t btn, joypad_inputs_t inp) {
     if (inp.btn.c_left)  rotateLeft(idx);
     if (inp.btn.c_right) rotateRight(idx);
 
-    if (inp.btn.d_up)    { moveForward(idx);  moving = true; }
-    if (inp.btn.d_down)  { moveBackward(idx); moving = true; }
-    if (inp.btn.d_left)  { moveLeft(idx);   moving = true; }
-    if (inp.btn.d_right) { moveRight(idx);  moving = true; }
-    if (inp.btn.l)       { moveLeft(idx);  moving = true; }
-    if (inp.btn.r)       { moveRight(idx); moving = true; }
+    if (inp.btn.d_up)    { move_at_angle(idx, local_players[idx].angle, STEP_SIZE * spd); moving = true; }
+    if (inp.btn.d_down)  { move_at_angle(idx, local_players[idx].angle + M_PI, STEP_SIZE * spd); moving = true; }
+    if (inp.btn.d_left)  { move_at_angle(idx, local_players[idx].angle - (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
+    if (inp.btn.d_right) { move_at_angle(idx, local_players[idx].angle + (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
+    if (inp.btn.l)       { move_at_angle(idx, local_players[idx].angle - (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
+    if (inp.btn.r)       { move_at_angle(idx, local_players[idx].angle + (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
 
     local_players[idx].is_moving = moving;
+
+    /* A pressed = jump (only when on ground) */
+    if (btn.a && local_players[idx].jump_z == 0.0f) {
+        local_players[idx].jump_vel = JUMP_VELOCITY;
+    }
+    local_players[idx].jump_z   += local_players[idx].jump_vel;
+    local_players[idx].jump_vel -= GRAVITY;
+    if (local_players[idx].jump_z <= 0.0f) {
+        local_players[idx].jump_z   = 0.0f;
+        local_players[idx].jump_vel = 0.0f;
+    }
 
     /* Decrement bolt-action cooldown */
     if (local_players[idx].fire_cooldown > 0)

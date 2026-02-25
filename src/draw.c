@@ -88,13 +88,16 @@ void castRays(surface_t *surf, float *depthBuf, sprite_t *wallTex,
     float angle = local_players[playerIdx].angle;
     float fovR  = (float)playerFov * (M_PI / 180.0f);
 
+    int vshift = (int)(local_players[playerIdx].jump_z * (float)vpH);
+    int horizon = vpH / 2 + vshift;
+
     rdpq_set_scissor(vpX, vpY, vpX + vpW, vpY + vpH);
 
     /* ---- Ceiling & floor: two fast fill rectangles ---- */
     rdpq_set_mode_fill(RGBA32(30, 30, 180, 255));
-    rdpq_fill_rectangle(vpX, vpY, vpX + vpW, vpY + vpH / 2);
+    rdpq_fill_rectangle(vpX, vpY, vpX + vpW, vpY + horizon);
     rdpq_set_mode_fill(RGBA32(100, 55, 15, 255));
-    rdpq_fill_rectangle(vpX, vpY + vpH / 2, vpX + vpW, vpY + vpH);
+    rdpq_fill_rectangle(vpX, vpY + horizon, vpX + vpW, vpY + vpH);
 
     /* ---- Wall columns: flat colour with distance fog ---- */
     /* Using texture_rectangle in standard+FLAT mode avoids texture uploads
@@ -137,9 +140,9 @@ void castRays(surface_t *surf, float *depthBuf, sprite_t *wallTex,
         depthBuf[col] = dist;
 
         int lineH = (int)((float)vpH / dist);
-        int drawStart = vpY + vpH / 2 - lineH / 2;
+        int drawStart = vpY + horizon - lineH / 2;
         if (drawStart < vpY) drawStart = vpY;
-        int drawEnd = vpY + vpH / 2 + lineH / 2;
+        int drawEnd = vpY + horizon + lineH / 2;
         if (drawEnd >= vpY + vpH) drawEnd = vpY + vpH - 1;
         int wallH = drawEnd - drawStart + 1;
         if (wallH <= 0) continue;
@@ -189,12 +192,14 @@ void drawDeerBillboard(surface_t *surf, const float *depthBuf,
 
     if (fabsf(rel) > fovR * 0.5f + 0.5f) return;
 
+    int vshift = (int)(local_players[playerIdx].jump_z * (float)vpH);
+
     int cX = vpX + (int)((0.5f + rel / fovR) * (float)vpW);
     int sz = (int)((float)vpH / depth);
     if (sz <= 0) return;
 
     int hOff = cX - sz / 2;
-    int vOff = vpY + vpH / 2 - sz / 2;
+    int vOff = vpY + vpH / 2 + vshift - sz / 2;
 
     rdpq_set_scissor(vpX, vpY, vpX + vpW, vpY + vpH);
     rdpq_set_mode_standard();
@@ -304,6 +309,8 @@ void drawBullets(surface_t *surf, const float *depthBuf,
     float angle = local_players[playerIdx].angle;
     float fovR  = (float)playerFov * (M_PI / 180.0f);
 
+    int vshift = (int)(local_players[playerIdx].jump_z * (float)vpH);
+
     bool any = false;
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (!bullets[i].active) continue;
@@ -330,7 +337,7 @@ void drawBullets(surface_t *surf, const float *depthBuf,
         if (sz > 20) sz = 20;
 
         int sx = cX - sz / 2;
-        int sy = vpY + vpH / 2 - sz / 2;
+        int sy = vpY + vpH / 2 + vshift - sz / 2;
 
         if (!any) {
             rdpq_set_scissor(vpX, vpY, vpX + vpW, vpY + vpH);

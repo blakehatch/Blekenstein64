@@ -11,6 +11,9 @@
 #define FIRE_COOLDOWN     75   /* frames between shots (~2.5 s at 30 fps) */
 #define BULLET_SPEED      0.40f
 #define BULLET_HIT_RADIUS 0.55f
+#define SPRINT_FACTOR     1.8f
+#define JUMP_VELOCITY     0.020f
+#define GRAVITY           0.0015f
 
 typedef struct {
     float x, y, angle;
@@ -22,6 +25,9 @@ typedef struct {
     int   deaths;
     bool  just_fired;    /* true for one frame when a shot is fired (SFX trigger) */
     bool  just_died;     /* true for one frame when this player is killed (SFX trigger) */
+    float jump_z;        /* current jump height (0 = on ground) */
+    float jump_vel;      /* vertical velocity for jump arc */
+    bool  is_sprinting;
 } player_state_t;
 
 typedef struct {
