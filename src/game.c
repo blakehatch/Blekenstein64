@@ -34,8 +34,17 @@ player_state_t local_players[MAX_LOCAL_PLAYERS];
 int num_local_players = 1;
 int playerFov = 70;
 
-deer_t deer_enemies[NUM_DEER] = {{12.0f, 4.0f, true}};
-bullet_t bullets[MAX_BULLETS];
+deer_t    deer_enemies[NUM_DEER] = {{12.0f, 4.0f, true}};
+bullet_t  bullets[MAX_BULLETS];
+powerup_t powerups[MAX_POWERUPS];
+
+static int powerup_spawn_timer = 0;
+static void spawn_one_powerup(void);  /* forward declaration */
+
+/* Open floor positions where powerups may spawn — verified against the map. */
+#define NUM_PU_SPOTS 8
+static const float pu_x[NUM_PU_SPOTS] = { 3.5f, 10.5f, 15.5f,  3.5f, 15.5f,  3.5f, 10.5f, 15.5f };
+static const float pu_y[NUM_PU_SPOTS] = { 3.5f,  3.5f,  3.5f, 10.5f, 10.5f, 16.5f, 16.5f, 16.5f };
 
 static const float spawn_x[MAX_LOCAL_PLAYERS] = {7.5f, 7.5f, 9.5f, 9.5f};
 static const float spawn_y[MAX_LOCAL_PLAYERS] = {6.5f, 8.5f, 6.5f, 8.5f};
@@ -75,9 +84,19 @@ void init_players(int count) {
         local_players[i].jump_z        = 0.0f;
         local_players[i].jump_vel      = 0.0f;
         local_players[i].is_sprinting  = false;
+        local_players[i].powerup_kind  = -1;
+        local_players[i].powerup_timer = 0;
     }
-    for (int i = 0; i < MAX_BULLETS; i++)
+    for (int i = 0; i < MAX_BULLETS; i++) {
         bullets[i].active = false;
+        bullets[i].big    = false;
+    }
+    for (int i = 0; i < MAX_POWERUPS; i++)
+        powerups[i].active = false;
+    powerup_spawn_timer = 0;
+    /* Pre-seed two powerups so there is always something to pick up. */
+    spawn_one_powerup();
+    spawn_one_powerup();
 
     /* Seed the C random number generator from the hardware cycle counter so
      * respawn positions differ every play session. */
@@ -120,16 +139,33 @@ void rotateRight(int idx) {
         local_players[idx].angle -= 2.0f * M_PI;
 }
 
-void fire_bullet(int player_idx) {
+/* Spawn one bullet travelling at the given absolute angle. */
+static void fire_one_bullet(int player_idx, float angle, bool big) {
     for (int i = 0; i < MAX_BULLETS; i++) {
         if (bullets[i].active) continue;
         bullets[i].x      = local_players[player_idx].x;
         bullets[i].y      = local_players[player_idx].y;
-        bullets[i].dx     = cosf(local_players[player_idx].angle);
-        bullets[i].dy     = sinf(local_players[player_idx].angle);
+        bullets[i].dx     = cosf(angle);
+        bullets[i].dy     = sinf(angle);
         bullets[i].owner  = player_idx;
         bullets[i].active = true;
+        bullets[i].big    = big;
         return;
+    }
+}
+
+void fire_bullet(int player_idx) {
+    float base  = local_players[player_idx].angle;
+    int   kind  = local_players[player_idx].powerup_kind;
+    bool  big   = (kind == POWERUP_BIG_BULLET);
+
+    if (kind == POWERUP_SPREAD_SHOT) {
+        /* Three bullets: centre ±0.26 rad (~15°) */
+        fire_one_bullet(player_idx, base - 0.26f, false);
+        fire_one_bullet(player_idx, base,          false);
+        fire_one_bullet(player_idx, base + 0.26f, false);
+    } else {
+        fire_one_bullet(player_idx, base, big);
     }
 }
 
@@ -149,12 +185,13 @@ void update_bullets(void) {
         }
 
         /* Player hit detection — skip the bullet's owner */
+        float hit_r = bullets[i].big ? BIG_BULLET_RADIUS : BULLET_HIT_RADIUS;
         for (int p = 0; p < num_local_players; p++) {
             if (p == bullets[i].owner) continue;
             float dx = local_players[p].x - bullets[i].x;
             float dy = local_players[p].y - bullets[i].y;
             float dist = sqrtf(dx*dx + dy*dy);
-            if (dist < BULLET_HIT_RADIUS) {
+            if (dist < hit_r) {
                 /* Bullet travels at floor level — a well-timed jump dodges it */
                 if (local_players[p].jump_z >= JUMP_DODGE_MIN_Z) continue;
                 int owner = bullets[i].owner;
@@ -176,6 +213,8 @@ void update_bullets(void) {
                 local_players[p].health        = 100;
                 local_players[p].fire_cooldown = 0;
                 local_players[p].just_died     = true;
+                local_players[p].powerup_kind  = -1;
+                local_players[p].powerup_timer = 0;
                 bullets[i].active = false;
                 break;
             }
@@ -188,7 +227,7 @@ void update_bullets(void) {
                 if (!deer_enemies[d].active) continue;
                 float dx = deer_enemies[d].x - bullets[i].x;
                 float dy = deer_enemies[d].y - bullets[i].y;
-                if (sqrtf(dx*dx + dy*dy) < BULLET_HIT_RADIUS) {
+                if (sqrtf(dx*dx + dy*dy) < hit_r) {
                     deer_enemies[d].active = false;
                     bullets[i].active      = false;
                     local_players[bullets[i].owner].kills++;
@@ -208,6 +247,17 @@ void update_player(int idx, joypad_buttons_t btn, joypad_inputs_t inp) {
     bool sprinting = inp.btn.b;
     float spd = sprinting ? SPRINT_FACTOR : 1.0f;
     local_players[idx].is_sprinting = sprinting;
+
+    /* Powerup speed modifiers */
+    if (local_players[idx].powerup_kind == POWERUP_SPEED)
+        spd *= 2.0f;
+    else if (local_players[idx].powerup_kind == POWERUP_SLOW)
+        spd *= 0.4f;
+
+    /* Effective fire cooldown (FAST_FIRE cuts it to 1/4) */
+    int cooldown = (local_players[idx].powerup_kind == POWERUP_FAST_FIRE)
+        ? (FIRE_COOLDOWN / 4)
+        : FIRE_COOLDOWN;
 
     bool moving = false;
 
@@ -262,13 +312,72 @@ void update_player(int idx, joypad_buttons_t btn, joypad_inputs_t inp) {
     local_players[idx].just_fired = false;
     if (btn.z && local_players[idx].fire_cooldown == 0) {
         fire_bullet(idx);
-        local_players[idx].fire_cooldown = FIRE_COOLDOWN;
+        local_players[idx].fire_cooldown = cooldown;
         local_players[idx].just_fired    = true;
     }
 
     /* Show firing sprite for the first ~15 frames after the shot */
     local_players[idx].is_firing =
-        (local_players[idx].fire_cooldown > FIRE_COOLDOWN - 15);
+        (local_players[idx].fire_cooldown > cooldown - 15);
+}
+
+static void spawn_one_powerup(void) {
+    int slot = -1;
+    for (int i = 0; i < MAX_POWERUPS; i++)
+        if (!powerups[i].active) { slot = i; break; }
+    if (slot == -1) return;   /* all slots occupied */
+
+    int kind = rand() % NUM_POWERUP_KINDS;
+    int pos  = rand() % NUM_PU_SPOTS;
+
+    /* Try not to stack two powerups on the same tile. */
+    for (int attempt = 0; attempt < NUM_PU_SPOTS; attempt++) {
+        bool clear = true;
+        for (int i = 0; i < MAX_POWERUPS; i++) {
+            if (!powerups[i].active) continue;
+            float ddx = powerups[i].x - pu_x[pos];
+            float ddy = powerups[i].y - pu_y[pos];
+            if (ddx*ddx + ddy*ddy < 1.0f) { clear = false; break; }
+        }
+        if (clear) break;
+        pos = (pos + 1) % NUM_PU_SPOTS;
+    }
+
+    powerups[slot].x      = pu_x[pos];
+    powerups[slot].y      = pu_y[pos];
+    powerups[slot].kind   = kind;
+    powerups[slot].active = true;
+}
+
+void update_powerups(void) {
+    /* Timed auto-spawn */
+    if (++powerup_spawn_timer >= POWERUP_SPAWN_RATE) {
+        powerup_spawn_timer = 0;
+        spawn_one_powerup();
+    }
+
+    /* Check player pickup (contact radius = 0.5 tiles) */
+    for (int i = 0; i < MAX_POWERUPS; i++) {
+        if (!powerups[i].active) continue;
+        for (int p = 0; p < num_local_players; p++) {
+            float dx = local_players[p].x - powerups[i].x;
+            float dy = local_players[p].y - powerups[i].y;
+            if (dx*dx + dy*dy < 0.5f * 0.5f) {
+                local_players[p].powerup_kind  = powerups[i].kind;
+                local_players[p].powerup_timer = POWERUP_DURATION;
+                powerups[i].active = false;
+                break;
+            }
+        }
+    }
+
+    /* Count-down active powerup timers */
+    for (int p = 0; p < num_local_players; p++) {
+        if (local_players[p].powerup_timer > 0) {
+            if (--local_players[p].powerup_timer == 0)
+                local_players[p].powerup_kind = -1;
+        }
+    }
 }
 
 void update_deer(void) {

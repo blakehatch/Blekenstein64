@@ -51,6 +51,12 @@ void drawBullets(surface_t *surf, const float *depthBuf,
 /* Draw separator lines between split-screen viewports. */
 void drawViewportBorders(surface_t *surf, int numPlayers);
 
+/* Draw active world-space powerup pickups, depth-tested against depthBuf.
+ * tick drives the bobbing animation. */
+void drawPowerups(surface_t *surf, const float *depthBuf,
+                  int vpX, int vpY, int vpW, int vpH, int playerIdx,
+                  uint32_t tick);
+
 /* Fix magenta/pink colorkey: clears alpha bit for hot-pink RGBA5551 pixels.
  * Call once after sprite_load() for any sprite with a painted background. */
 void fix_sprite_colorkey(sprite_t *spr);

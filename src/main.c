@@ -326,6 +326,7 @@ restart_game:;
                 update_deer();
 
             update_bullets();
+            update_powerups();
 
             /* ---- Trigger SFX from game events ---- */
             for (int i = 0; i < num_local_players; i++) {
@@ -368,6 +369,7 @@ restart_game:;
             }
 
             drawBullets(disp, depthBuf, vp.x, vp.y, vp.w, vp.h, i);
+            drawPowerups(disp, depthBuf, vp.x, vp.y, vp.w, vp.h, i, game_tick);
 
             drawGunHUD(disp, gun_idle, gun_fire,
                        local_players[i].is_firing,
@@ -388,6 +390,11 @@ restart_game:;
         rdpq_detach_wait();
 
         /* Kills/Deaths in top-right of each viewport */
+        static const char *pu_labels[NUM_POWERUP_KINDS] = {"FF", "BB", "SP", "LT", "SS"};
+        static const uint8_t pu_r[NUM_POWERUP_KINDS]    = {220, 200,  20,  20, 160};
+        static const uint8_t pu_g[NUM_POWERUP_KINDS]    = {180,  30, 180,  60,  20};
+        static const uint8_t pu_b[NUM_POWERUP_KINDS]    = {  0,  20,  40, 220, 180};
+
         for (int i = 0; i < num_local_players; i++) {
             vp_t vp = get_vp(i, num_local_players);
             char buf[16];
@@ -396,6 +403,21 @@ restart_game:;
             graphics_draw_box(disp, vp.x + vp.w - 56, vp.y, 56, 11, hud_bg);
             graphics_set_color(hud_fg, hud_bg);
             graphics_draw_text(disp, vp.x + vp.w - 54, vp.y + 2, buf);
+
+            /* Active powerup indicator in top-left of viewport */
+            int pk = local_players[i].powerup_kind;
+            if (pk >= 0 && pk < NUM_POWERUP_KINDS) {
+                uint32_t pu_bg = graphics_make_color(pu_r[pk], pu_g[pk], pu_b[pk], 255);
+                uint32_t pu_fg = graphics_make_color(255, 255, 255, 255);
+                /* Flash the box in the last 3 seconds (90 frames) */
+                bool visible = (local_players[i].powerup_timer > 90) ||
+                               ((local_players[i].powerup_timer >> 3) & 1);
+                if (visible) {
+                    graphics_draw_box(disp, vp.x, vp.y, 24, 11, pu_bg);
+                    graphics_set_color(pu_fg, pu_bg);
+                    graphics_draw_text(disp, vp.x + 2, vp.y + 2, pu_labels[pk]);
+                }
+            }
         }
 
         /* Pause overlay (CPU-drawn on top) */

@@ -367,6 +367,136 @@ void drawBullets(surface_t *surf, const float *depthBuf,
 }
 
 /* ------------------------------------------------------------------ */
+/* drawPowerups — depth-tested world-space pickup icons                */
+/* ------------------------------------------------------------------ */
+
+/* Draw a simple recognisable symbol inside [bx,by, bx+sz, by+sz].
+ * All shapes use the already-set fill mode; caller switches colour. */
+
+static void draw_pu_fast_fire(int bx, int by, int sz) {
+    /* Three thin horizontal white lines — suggests high rate of fire. */
+    int s8 = sz / 8; if (s8 < 1) s8 = 1;
+    rdpq_set_fill_color(RGBA32(255, 255, 200, 255));
+    rdpq_fill_rectangle(bx + s8, by + s8*2, bx + sz - s8, by + s8*3);
+    rdpq_fill_rectangle(bx + s8, by + s8*4, bx + sz - s8, by + s8*5);
+    rdpq_fill_rectangle(bx + s8, by + s8*6, bx + sz - s8, by + s8*7);
+}
+
+static void draw_pu_big_bullet(int bx, int by, int sz) {
+    /* One large centred square — a visually "fat" bullet. */
+    int m = sz / 5; if (m < 1) m = 1;
+    rdpq_set_fill_color(RGBA32(255, 220, 200, 255));
+    rdpq_fill_rectangle(bx + m, by + m, bx + sz - m, by + sz - m);
+}
+
+static void draw_pu_speed(int bx, int by, int sz) {
+    /* Three stacked right-pointing wedges (>>>) suggesting speed. */
+    int s = sz / 4; if (s < 1) s = 1;
+    rdpq_set_fill_color(RGBA32(180, 255, 180, 255));
+    /* Left bar */
+    rdpq_fill_rectangle(bx + s/2,     by + s,     bx + s/2 + s,   by + sz - s);
+    /* Middle point */
+    rdpq_fill_rectangle(bx + s/2 + s, by + s + s/2, bx + s/2 + s*2, by + sz - s - s/2);
+    /* Right tip */
+    rdpq_fill_rectangle(bx + s/2 + s*2, by + s + s, bx + s/2 + s*3, by + sz - s - s);
+}
+
+static void draw_pu_slow(int bx, int by, int sz) {
+    /* Yellow lightning bolt zig-zag on blue background. */
+    int s8 = sz / 8; if (s8 < 1) s8 = 1;
+    rdpq_set_fill_color(RGBA32(255, 240, 50, 255));
+    /* Top-right prong */
+    rdpq_fill_rectangle(bx + s8*5, by,        bx + sz,   by + s8*3);
+    /* Centre sweep (left) */
+    rdpq_fill_rectangle(bx + s8*2, by + s8*3, bx + s8*7, by + s8*5);
+    /* Bottom-left prong */
+    rdpq_fill_rectangle(bx,        by + s8*5, bx + s8*3, by + sz);
+}
+
+static void draw_pu_spread(int bx, int by, int sz) {
+    /* Three diverging lines from left edge — fan / spread shot.  */
+    int s8 = sz / 8; if (s8 < 1) s8 = 1;
+    rdpq_set_fill_color(RGBA32(255, 180, 255, 255));
+    /* Centre ray */
+    rdpq_fill_rectangle(bx + s8, by + s8*3, bx + sz - s8, by + s8*5);
+    /* Upper ray */
+    rdpq_fill_rectangle(bx + s8*2, by + s8,   bx + sz - s8, by + s8*3);
+    /* Lower ray */
+    rdpq_fill_rectangle(bx + s8*2, by + s8*5, bx + sz - s8, by + s8*7);
+}
+
+void drawPowerups(surface_t *surf, const float *depthBuf,
+                  int vpX, int vpY, int vpW, int vpH, int playerIdx,
+                  uint32_t tick) {
+    (void)surf;
+
+    float posX  = local_players[playerIdx].x;
+    float posY  = local_players[playerIdx].y;
+    float angle = local_players[playerIdx].angle;
+    float fovR  = (float)playerFov * (M_PI / 180.0f);
+    int   vshift = (int)(local_players[playerIdx].jump_z * (float)vpH);
+
+    /* Background colours per powerup kind */
+    static const uint8_t bg_r[NUM_POWERUP_KINDS] = {220, 200,  20,  20, 160};
+    static const uint8_t bg_g[NUM_POWERUP_KINDS] = {180,  30, 180,  60,  20};
+    static const uint8_t bg_b[NUM_POWERUP_KINDS] = {  0,  20,  40, 220, 180};
+
+    bool scissor_set = false;
+
+    for (int i = 0; i < MAX_POWERUPS; i++) {
+        if (!powerups[i].active) continue;
+
+        float dx    = powerups[i].x - posX;
+        float dy    = powerups[i].y - posY;
+        float depth = sqrtf(dx*dx + dy*dy);
+        if (depth < 0.2f) continue;
+
+        float sprAngle = atan2f(dy, dx);
+        float rel = sprAngle - angle;
+        while (rel >  M_PI) rel -= 2.0f * M_PI;
+        while (rel < -M_PI) rel += 2.0f * M_PI;
+        if (fabsf(rel) > fovR * 0.5f + 0.3f) continue;
+
+        int cX = vpX + (int)((0.5f + rel / fovR) * (float)vpW);
+        int di = cX - vpX;
+        if (di < 0 || di >= vpW) continue;
+        if (depthBuf[di] < depth) continue;   /* wall is closer */
+
+        int sz = (int)((float)vpH / depth * 0.25f);
+        if (sz < 6)  sz = 6;
+        if (sz > 48) sz = 48;
+
+        /* Vertical bobbing */
+        int bob = (int)(sinf((float)tick * 0.07f + (float)i * 1.5f) * 4.0f);
+
+        int sx = cX - sz / 2;
+        int sy = vpY + vpH / 2 + vshift - sz / 2 + bob;
+
+        if (!scissor_set) {
+            rdpq_set_scissor(vpX, vpY, vpX + vpW, vpY + vpH);
+            rdpq_set_mode_fill(RGBA32(0, 0, 0, 255));
+            scissor_set = true;
+        }
+
+        int kind = powerups[i].kind;
+        if (kind < 0 || kind >= NUM_POWERUP_KINDS) continue;
+
+        /* Background square */
+        rdpq_set_fill_color(RGBA32(bg_r[kind], bg_g[kind], bg_b[kind], 255));
+        rdpq_fill_rectangle(sx, sy, sx + sz, sy + sz);
+
+        /* Symbol overlay */
+        switch (kind) {
+            case POWERUP_FAST_FIRE:   draw_pu_fast_fire(sx, sy, sz);  break;
+            case POWERUP_BIG_BULLET:  draw_pu_big_bullet(sx, sy, sz); break;
+            case POWERUP_SPEED:       draw_pu_speed(sx, sy, sz);      break;
+            case POWERUP_SLOW:        draw_pu_slow(sx, sy, sz);       break;
+            case POWERUP_SPREAD_SHOT: draw_pu_spread(sx, sy, sz);     break;
+        }
+    }
+}
+
+/* ------------------------------------------------------------------ */
 /* drawViewportBorders — 4-px RDP fill dividers                        */
 /* ------------------------------------------------------------------ */
 
