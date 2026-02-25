@@ -171,7 +171,7 @@ void castRays(surface_t *surf, float *depthBuf, sprite_t *wallTex,
 
 void drawDeerBillboard(surface_t *surf, const float *depthBuf,
                        const billboard_t *bb, color_t tint,
-                       float deerX, float deerY,
+                       float deerX, float deerY, float targetJumpZ,
                        int vpX, int vpY, int vpW, int vpH, int playerIdx) {
     (void)surf;
 
@@ -192,14 +192,15 @@ void drawDeerBillboard(surface_t *surf, const float *depthBuf,
 
     if (fabsf(rel) > fovR * 0.5f + 0.5f) return;
 
-    int vshift = (int)(local_players[playerIdx].jump_z * (float)vpH);
+    int vshift       = (int)(local_players[playerIdx].jump_z * (float)vpH);
+    int targetVShift = (int)(targetJumpZ * (float)vpH);
 
     int cX = vpX + (int)((0.5f + rel / fovR) * (float)vpW);
     int sz = (int)((float)vpH / depth);
     if (sz <= 0) return;
 
     int hOff = cX - sz / 2;
-    int vOff = vpY + vpH / 2 + vshift - sz / 2;
+    int vOff = vpY + vpH / 2 + vshift - targetVShift - sz / 2;
 
     rdpq_set_scissor(vpX, vpY, vpX + vpW, vpY + vpH);
     rdpq_set_mode_standard();

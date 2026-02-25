@@ -155,6 +155,8 @@ void update_bullets(void) {
             float dy = local_players[p].y - bullets[i].y;
             float dist = sqrtf(dx*dx + dy*dy);
             if (dist < BULLET_HIT_RADIUS) {
+                /* Bullet travels at floor level — a well-timed jump dodges it */
+                if (local_players[p].jump_z >= JUMP_DODGE_MIN_Z) continue;
                 int owner = bullets[i].owner;
                 local_players[owner].kills++;
                 local_players[p].deaths++;

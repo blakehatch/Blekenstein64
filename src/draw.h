@@ -31,7 +31,7 @@ void castRays(surface_t *surf, float *depthBuf, sprite_t *wallTex,
  * no tint (AI deer).  Player tints differentiate split-screen players. */
 void drawDeerBillboard(surface_t *surf, const float *depthBuf,
                        const billboard_t *bb, color_t tint,
-                       float deerX, float deerY,
+                       float deerX, float deerY, float targetJumpZ,
                        int vpX, int vpY, int vpW, int vpH, int playerIdx);
 
 /* Draw the gun HUD sprite at the bottom of a viewport. */

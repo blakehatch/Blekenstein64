@@ -14,6 +14,7 @@
 #define SPRINT_FACTOR     1.8f
 #define JUMP_VELOCITY     0.020f
 #define GRAVITY           0.0015f
+#define JUMP_DODGE_MIN_Z  0.08f   /* jump_z threshold to dodge a bullet */
 
 typedef struct {
     float x, y, angle;

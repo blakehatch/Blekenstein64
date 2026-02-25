@@ -354,7 +354,7 @@ restart_game:;
                 for (int d = 0; d < NUM_DEER; d++) {
                     if (!deer_enemies[d].active) continue;
                     drawDeerBillboard(disp, depthBuf, deer_bb, DEER_TINT,
-                                      deer_enemies[d].x, deer_enemies[d].y,
+                                      deer_enemies[d].x, deer_enemies[d].y, 0.0f,
                                       vp.x, vp.y, vp.w, vp.h, i);
                 }
             }
@@ -363,6 +363,7 @@ restart_game:;
                 if (j == i) continue;
                 drawDeerBillboard(disp, depthBuf, deer_bb, PLAYER_TINT[j],
                                   local_players[j].x, local_players[j].y,
+                                  local_players[j].jump_z,
                                   vp.x, vp.y, vp.w, vp.h, i);
             }
 
