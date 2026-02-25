@@ -1,0 +1,45 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build N64 ROM",
+      "type": "shell",
+      "command": "libdragon",
+      "args": ["make"],
+      "options": {
+        "env": {
+          "DOCKER_DEFAULT_PLATFORM": "linux/amd64"
+        },
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "presentation": {
+        "reveal": "silent",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Run in Ares",
+      "type": "shell",
+      "command": "open",
+      "args": ["-a", "Ares", "${workspaceFolder}/b64.z64"],
+      "dependsOn": ["Build N64 ROM"],
+      "dependsOrder": "sequence",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      },
+      "presentation": { "reveal": "silent" }
+    },
+    {
+      "label": "Run in Ares (CLI)",
+      "type": "shell",
+      "command": "ares",
+      "args": ["${workspaceFolder}/b64.z64"],
+      "dependsOn": ["Build N64 ROM"],
+      "dependsOrder": "sequence",
+      "group": "test",
+      "presentation": { "reveal": "silent" }
+    }
+  ]
+}
