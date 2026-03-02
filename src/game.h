@@ -13,7 +13,7 @@
 #define BULLET_SPEED      0.40f
 #define BULLET_HIT_RADIUS 0.55f
 #define BIG_BULLET_RADIUS 1.0f  /* hit radius with BIG_BULLET powerup */
-#define SPRINT_FACTOR     1.8f
+#define SPRINT_FACTOR     1.3f
 #define JUMP_VELOCITY     0.020f
 #define GRAVITY           0.0015f
 #define JUMP_DODGE_MIN_Z  0.08f   /* jump_z threshold to dodge a bullet */

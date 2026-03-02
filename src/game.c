@@ -230,9 +230,10 @@ void update_bullets(void) {
 }
 
 void update_player(int idx, joypad_buttons_t btn, joypad_inputs_t inp) {
-    const float THRESHOLD  = 10.0f;
-    const float MOVE_SCALE = 0.003f;
-    const float STEP_SIZE  = 0.05f;
+    const float DEADZONE       = 0.08f;
+    const float MAX_MOVE_SPEED = 0.08f;   /* units/frame at full stick deflection */
+    const float MAX_TURN_SPEED = 0.045f;  /* rad/frame at full stick deflection   */
+    const float STEP_SIZE      = 0.05f;   /* digital button movement step         */
 
     /* B held = sprint */
     bool sprinting = inp.btn.b;
@@ -252,31 +253,36 @@ void update_player(int idx, joypad_buttons_t btn, joypad_inputs_t inp) {
 
     bool moving = false;
 
-    /* Stick Y / D-pad up-down — move forward / backward */
-    if (inp.stick_y > THRESHOLD) {
-        move_at_angle(idx, local_players[idx].angle, inp.stick_y * MOVE_SCALE * spd);
+    /* Normalize stick axes to [-1, 1] */
+    float sy = inp.stick_y / 127.0f;
+    float sx = inp.stick_x / 127.0f;
+
+    /* Stick Y — forward / backward */
+    if (sy > DEADZONE) {
+        move_at_angle(idx, local_players[idx].angle, sy * MAX_MOVE_SPEED * spd);
         moving = true;
-    } else if (inp.stick_y < -THRESHOLD) {
-        move_at_angle(idx, local_players[idx].angle + M_PI, (-inp.stick_y) * MOVE_SCALE * spd);
+    } else if (sy < -DEADZONE) {
+        move_at_angle(idx, local_players[idx].angle + M_PI, -sy * MAX_MOVE_SPEED * spd);
         moving = true;
     }
-    if (inp.btn.d_up)   { move_at_angle(idx, local_players[idx].angle,         STEP_SIZE * spd); moving = true; }
-    if (inp.btn.d_down) { move_at_angle(idx, local_players[idx].angle + M_PI,  STEP_SIZE * spd); moving = true; }
+    /* D-pad up/down — digital forward / backward */
+    if (inp.btn.d_up)   { move_at_angle(idx, local_players[idx].angle,        STEP_SIZE * spd); moving = true; }
+    if (inp.btn.d_down) { move_at_angle(idx, local_players[idx].angle + M_PI, STEP_SIZE * spd); moving = true; }
 
-    /* Stick X / D-pad left-right — strafe */
-    if (inp.stick_x > THRESHOLD) {
-        move_at_angle(idx, local_players[idx].angle + (M_PI / 2.0f), inp.stick_x * MOVE_SCALE * spd);
-        moving = true;
-    } else if (inp.stick_x < -THRESHOLD) {
-        move_at_angle(idx, local_players[idx].angle - (M_PI / 2.0f), (-inp.stick_x) * MOVE_SCALE * spd);
-        moving = true;
+    /* Stick X — turn left / right */
+    if (fabsf(sx) > DEADZONE) {
+        local_players[idx].angle += sx * MAX_TURN_SPEED;
+        if (local_players[idx].angle < 0.0f)         local_players[idx].angle += 2.0f * M_PI;
+        if (local_players[idx].angle >= 2.0f * M_PI) local_players[idx].angle -= 2.0f * M_PI;
     }
-    if (inp.btn.d_left)  { move_at_angle(idx, local_players[idx].angle - (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
-    if (inp.btn.d_right) { move_at_angle(idx, local_players[idx].angle + (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
 
-    /* C-Left / C-Right — turn */
-    if (inp.btn.c_left)  rotateLeft(idx);
-    if (inp.btn.c_right) rotateRight(idx);
+    /* C-Left / C-Right — strafe */
+    if (inp.btn.c_left)  { move_at_angle(idx, local_players[idx].angle - (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
+    if (inp.btn.c_right) { move_at_angle(idx, local_players[idx].angle + (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
+
+    /* D-pad left/right — turn */
+    if (inp.btn.d_left)  rotateLeft(idx);
+    if (inp.btn.d_right) rotateRight(idx);
 
     /* L / R shoulders — strafe */
     if (inp.btn.l) { move_at_angle(idx, local_players[idx].angle - (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
