@@ -2,39 +2,17 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include "game.h"
+#include "maps.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
 #endif
 
-const int map[20][20] = {
-    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1,1,1,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1},
-    {1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,1},
-    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}
-};
-
 player_state_t local_players[MAX_LOCAL_PLAYERS];
 int num_local_players = 1;
 int playerFov = 70;
 
-deer_t    deer_enemies[NUM_DEER] = {{12.0f, 4.0f, true}};
+deer_t    deer_enemies[NUM_DEER] = {{12.0f, 4.0f, true, false, 0}};
 bullet_t  bullets[MAX_BULLETS];
 powerup_t powerups[MAX_POWERUPS];
 
@@ -66,6 +44,7 @@ static const float rsp_y[NUM_RESPAWN_SPOTS] = {
 static int respawn_rng = 0;   /* rolling counter for pseudo-random index */
 
 void init_players(int count) {
+    set_map(selected_map);
     if (count < 1) count = 1;
     if (count > MAX_LOCAL_PLAYERS) count = MAX_LOCAL_PLAYERS;
     num_local_players = count;
@@ -86,6 +65,9 @@ void init_players(int count) {
         local_players[i].is_sprinting  = false;
         local_players[i].powerup_kind  = -1;
         local_players[i].powerup_timer = 0;
+        local_players[i].is_dead       = false;
+        local_players[i].respawn_x     = spawn_x[i];
+        local_players[i].respawn_y     = spawn_y[i];
     }
     for (int i = 0; i < MAX_BULLETS; i++) {
         bullets[i].active = false;
@@ -111,14 +93,14 @@ static void move_at_angle(int idx, float angle, float dist) {
     int cx = (int)local_players[idx].x;
     int cy = (int)local_players[idx].y;
 
-    if (mx >= 0 && mx < 20 && my >= 0 && my < 20 && map[my][mx] == 0) {
+    if (mx >= 0 && mx < 20 && my >= 0 && my < 20 && current_map[my][mx] == 0) {
         local_players[idx].x = nx;
         local_players[idx].y = ny;
         return;
     }
-    if (mx >= 0 && mx < 20 && cy >= 0 && cy < 20 && map[cy][mx] == 0)
+    if (mx >= 0 && mx < 20 && cy >= 0 && cy < 20 && current_map[cy][mx] == 0)
         local_players[idx].x = nx;
-    if (cx >= 0 && cx < 20 && my >= 0 && my < 20 && map[my][cx] == 0)
+    if (cx >= 0 && cx < 20 && my >= 0 && my < 20 && current_map[my][cx] == 0)
         local_players[idx].y = ny;
 }
 
@@ -128,13 +110,13 @@ void moveLeft(int idx)     { move_at_angle(idx, local_players[idx].angle - (M_PI
 void moveRight(int idx)    { move_at_angle(idx, local_players[idx].angle + (M_PI / 2.0f), 0.05f); }
 
 void rotateLeft(int idx) {
-    local_players[idx].angle -= 0.05f;
+    local_players[idx].angle -= 0.025f;
     if (local_players[idx].angle < 0.0f)
         local_players[idx].angle += 2.0f * M_PI;
 }
 
 void rotateRight(int idx) {
-    local_players[idx].angle += 0.05f;
+    local_players[idx].angle += 0.025f;
     if (local_players[idx].angle >= 2.0f * M_PI)
         local_players[idx].angle -= 2.0f * M_PI;
 }
@@ -179,15 +161,16 @@ void update_bullets(void) {
         /* Wall collision */
         int mx = (int)bullets[i].x;
         int my = (int)bullets[i].y;
-        if (mx < 0 || mx >= 20 || my < 0 || my >= 20 || map[my][mx] != 0) {
+        if (mx < 0 || mx >= 20 || my < 0 || my >= 20 || current_map[my][mx] != 0) {
             bullets[i].active = false;
             continue;
         }
 
-        /* Player hit detection — skip the bullet's owner */
+        /* Player hit detection — skip the bullet's owner and dead players */
         float hit_r = bullets[i].big ? BIG_BULLET_RADIUS : BULLET_HIT_RADIUS;
         for (int p = 0; p < num_local_players; p++) {
             if (p == bullets[i].owner) continue;
+            if (local_players[p].is_dead) continue;
             float dx = local_players[p].x - bullets[i].x;
             float dy = local_players[p].y - bullets[i].y;
             float dist = sqrtf(dx*dx + dy*dy);
@@ -198,20 +181,27 @@ void update_bullets(void) {
                 local_players[owner].kills++;
                 local_players[p].deaths++;
 
-                /* Pick a random respawn spot that isn't where the killer is */
+                /* Pre-pick a respawn spot: far from killer, not inside a wall */
                 int spot = respawn_rng % NUM_RESPAWN_SPOTS;
                 respawn_rng++;
                 for (int attempt = 0; attempt < NUM_RESPAWN_SPOTS; attempt++) {
                     float kx = local_players[owner].x - rsp_x[spot];
                     float ky = local_players[owner].y - rsp_y[spot];
-                    if (kx*kx + ky*ky > 4.0f) break; /* > 2 tiles from killer */
+                    bool in_wall = (current_map[(int)rsp_y[spot]][(int)rsp_x[spot]] != 0);
+                    if (!in_wall && kx*kx + ky*ky > 4.0f) break;
                     spot = (spot + 1) % NUM_RESPAWN_SPOTS;
                 }
+                /* Fallback: any open spot */
+                if (current_map[(int)rsp_y[spot]][(int)rsp_x[spot]] != 0) {
+                    for (int attempt = 0; attempt < NUM_RESPAWN_SPOTS; attempt++) {
+                        if (current_map[(int)rsp_y[spot]][(int)rsp_x[spot]] == 0) break;
+                        spot = (spot + 1) % NUM_RESPAWN_SPOTS;
+                    }
+                }
 
-                local_players[p].x             = rsp_x[spot];
-                local_players[p].y             = rsp_y[spot];
-                local_players[p].health        = 100;
-                local_players[p].fire_cooldown = 0;
+                local_players[p].respawn_x     = rsp_x[spot];
+                local_players[p].respawn_y     = rsp_y[spot];
+                local_players[p].is_dead       = true;
                 local_players[p].just_died     = true;
                 local_players[p].powerup_kind  = -1;
                 local_players[p].powerup_timer = 0;
@@ -224,12 +214,13 @@ void update_bullets(void) {
         if (!bullets[i].active) continue;
         if (num_local_players == 1) {
             for (int d = 0; d < NUM_DEER; d++) {
-                if (!deer_enemies[d].active) continue;
+                if (!deer_enemies[d].active || deer_enemies[d].is_dead) continue;
                 float dx = deer_enemies[d].x - bullets[i].x;
                 float dy = deer_enemies[d].y - bullets[i].y;
                 if (sqrtf(dx*dx + dy*dy) < hit_r) {
-                    deer_enemies[d].active = false;
-                    bullets[i].active      = false;
+                    deer_enemies[d].is_dead    = true;
+                    deer_enemies[d].death_timer = 120; /* 2 s at 60 fps */
+                    bullets[i].active           = false;
                     local_players[bullets[i].owner].kills++;
                     break;
                 }
@@ -261,6 +252,7 @@ void update_player(int idx, joypad_buttons_t btn, joypad_inputs_t inp) {
 
     bool moving = false;
 
+    /* Stick Y / D-pad up-down — move forward / backward */
     if (inp.stick_y > THRESHOLD) {
         move_at_angle(idx, local_players[idx].angle, inp.stick_y * MOVE_SCALE * spd);
         moving = true;
@@ -268,28 +260,27 @@ void update_player(int idx, joypad_buttons_t btn, joypad_inputs_t inp) {
         move_at_angle(idx, local_players[idx].angle + M_PI, (-inp.stick_y) * MOVE_SCALE * spd);
         moving = true;
     }
+    if (inp.btn.d_up)   { move_at_angle(idx, local_players[idx].angle,         STEP_SIZE * spd); moving = true; }
+    if (inp.btn.d_down) { move_at_angle(idx, local_players[idx].angle + M_PI,  STEP_SIZE * spd); moving = true; }
 
-    /* Stick X — strafe left/right */
+    /* Stick X / D-pad left-right — strafe */
     if (inp.stick_x > THRESHOLD) {
-        move_at_angle(idx, local_players[idx].angle + (M_PI / 2.0f),
-                      inp.stick_x * MOVE_SCALE * spd);
+        move_at_angle(idx, local_players[idx].angle + (M_PI / 2.0f), inp.stick_x * MOVE_SCALE * spd);
         moving = true;
     } else if (inp.stick_x < -THRESHOLD) {
-        move_at_angle(idx, local_players[idx].angle - (M_PI / 2.0f),
-                      (-inp.stick_x) * MOVE_SCALE * spd);
+        move_at_angle(idx, local_players[idx].angle - (M_PI / 2.0f), (-inp.stick_x) * MOVE_SCALE * spd);
         moving = true;
     }
+    if (inp.btn.d_left)  { move_at_angle(idx, local_players[idx].angle - (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
+    if (inp.btn.d_right) { move_at_angle(idx, local_players[idx].angle + (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
 
     /* C-Left / C-Right — turn */
     if (inp.btn.c_left)  rotateLeft(idx);
     if (inp.btn.c_right) rotateRight(idx);
 
-    if (inp.btn.d_up)    { move_at_angle(idx, local_players[idx].angle, STEP_SIZE * spd); moving = true; }
-    if (inp.btn.d_down)  { move_at_angle(idx, local_players[idx].angle + M_PI, STEP_SIZE * spd); moving = true; }
-    if (inp.btn.d_left)  { move_at_angle(idx, local_players[idx].angle - (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
-    if (inp.btn.d_right) { move_at_angle(idx, local_players[idx].angle + (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
-    if (inp.btn.l)       { move_at_angle(idx, local_players[idx].angle - (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
-    if (inp.btn.r)       { move_at_angle(idx, local_players[idx].angle + (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
+    /* L / R shoulders — strafe */
+    if (inp.btn.l) { move_at_angle(idx, local_players[idx].angle - (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
+    if (inp.btn.r) { move_at_angle(idx, local_players[idx].angle + (M_PI / 2.0f), STEP_SIZE * spd); moving = true; }
 
     local_players[idx].is_moving = moving;
 
@@ -321,6 +312,17 @@ void update_player(int idx, joypad_buttons_t btn, joypad_inputs_t inp) {
         (local_players[idx].fire_cooldown > cooldown - 15);
 }
 
+void respawn_player(int p) {
+    local_players[p].x             = local_players[p].respawn_x;
+    local_players[p].y             = local_players[p].respawn_y;
+    local_players[p].health        = 100;
+    local_players[p].fire_cooldown = 0;
+    local_players[p].jump_z        = 0.0f;
+    local_players[p].jump_vel      = 0.0f;
+    local_players[p].is_moving     = false;
+    local_players[p].is_dead       = false;
+}
+
 static void spawn_one_powerup(void) {
     int slot = -1;
     for (int i = 0; i < MAX_POWERUPS; i++)
@@ -330,18 +332,22 @@ static void spawn_one_powerup(void) {
     int kind = rand() % NUM_POWERUP_KINDS;
     int pos  = rand() % NUM_PU_SPOTS;
 
-    /* Try not to stack two powerups on the same tile. */
+    /* Try not to stack two powerups on the same tile, and skip wall positions. */
     for (int attempt = 0; attempt < NUM_PU_SPOTS; attempt++) {
-        bool clear = true;
-        for (int i = 0; i < MAX_POWERUPS; i++) {
-            if (!powerups[i].active) continue;
-            float ddx = powerups[i].x - pu_x[pos];
-            float ddy = powerups[i].y - pu_y[pos];
-            if (ddx*ddx + ddy*ddy < 1.0f) { clear = false; break; }
+        bool in_wall = (current_map[(int)pu_y[pos]][(int)pu_x[pos]] != 0);
+        if (!in_wall) {
+            bool clear = true;
+            for (int i = 0; i < MAX_POWERUPS; i++) {
+                if (!powerups[i].active) continue;
+                float ddx = powerups[i].x - pu_x[pos];
+                float ddy = powerups[i].y - pu_y[pos];
+                if (ddx*ddx + ddy*ddy < 1.0f) { clear = false; break; }
+            }
+            if (clear) break;
         }
-        if (clear) break;
         pos = (pos + 1) % NUM_PU_SPOTS;
     }
+    if (current_map[(int)pu_y[pos]][(int)pu_x[pos]] != 0) return; /* no open spot */
 
     powerups[slot].x      = pu_x[pos];
     powerups[slot].y      = pu_y[pos];
@@ -362,7 +368,7 @@ void update_powerups(void) {
         for (int p = 0; p < num_local_players; p++) {
             float dx = local_players[p].x - powerups[i].x;
             float dy = local_players[p].y - powerups[i].y;
-            if (dx*dx + dy*dy < 0.5f * 0.5f) {
+            if (dx*dx + dy*dy < 0.85f * 0.85f) {
                 local_players[p].powerup_kind  = powerups[i].kind;
                 local_players[p].powerup_timer = POWERUP_DURATION;
                 powerups[i].active = false;
@@ -381,11 +387,18 @@ void update_powerups(void) {
 }
 
 void update_deer(void) {
-    /* AI deer only active in 1-player mode */
+    /* Count down death timers regardless of player count */
+    for (int i = 0; i < NUM_DEER; i++) {
+        if (!deer_enemies[i].active || !deer_enemies[i].is_dead) continue;
+        if (--deer_enemies[i].death_timer <= 0)
+            deer_enemies[i].active = false;
+    }
+
+    /* AI movement only active in 1-player mode */
     if (num_local_players > 1) return;
 
     for (int i = 0; i < NUM_DEER; i++) {
-        if (!deer_enemies[i].active) continue;
+        if (!deer_enemies[i].active || deer_enemies[i].is_dead) continue;
 
         /* Chase the nearest player */
         float minDist = 1e10f;
@@ -413,7 +426,7 @@ void update_deer(void) {
         }
 
         int mx = (int)newX, my = (int)newY;
-        if (mx >= 0 && mx < 20 && my >= 0 && my < 20 && map[my][mx] == 0) {
+        if (mx >= 0 && mx < 20 && my >= 0 && my < 20 && current_map[my][mx] == 0) {
             deer_enemies[i].x = newX;
             deer_enemies[i].y = newY;
         }

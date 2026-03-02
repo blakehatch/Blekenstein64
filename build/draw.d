@@ -1,1 +1,1 @@
-build/draw.o: src/draw.c src/draw.h src/game.h
+build/draw.o: src/draw.c src/draw.h src/game.h src/maps.h

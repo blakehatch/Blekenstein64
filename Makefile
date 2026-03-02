@@ -6,11 +6,12 @@ include $(N64_INST)/include/n64.mk
 all: b64.z64
 .PHONY: all
 
-OBJS = $(BUILD_DIR)/main.o $(BUILD_DIR)/game.o $(BUILD_DIR)/draw.o
+OBJS = $(BUILD_DIR)/main.o $(BUILD_DIR)/game.o $(BUILD_DIR)/draw.o $(BUILD_DIR)/maps.o
 
 # ---- Asset pipeline ----
 SPRITES = filesystem/sprites/Tree_Wall_Texture.sprite \
           filesystem/sprites/Deer_Enemy_Sprite.sprite \
+          filesystem/sprites/Deer_Enemy_Sprite_Death.sprite \
           filesystem/sprites/Rifle_GUI_Sprite.sprite \
           filesystem/sprites/Rifle_GUI_Sprite_Firing.sprite
 
@@ -18,6 +19,15 @@ filesystem/sprites/%.sprite: assets/sprites/%.png
 	@mkdir -p $(dir $@)
 	@echo "    [SPRITE] $@"
 	$(N64_MKSPRITE) --format RGBA16 -o "$(dir $@)" "$<"
+
+# Death sprite source is pre-resized to 256x256 (original is 1024x1024 which
+# exceeds the billboard texH cap of 256 rows, hiding the deer body).
+# mksprite names the output after the input file, so rename after conversion.
+filesystem/sprites/Deer_Enemy_Sprite_Death.sprite: assets/sprites/Deer_Enemy_Sprite_Death_256.png
+	@mkdir -p $(dir $@)
+	@echo "    [SPRITE] $@"
+	$(N64_MKSPRITE) --format RGBA16 -o "$(dir $@)" "$<"
+	mv $(dir $@)Deer_Enemy_Sprite_Death_256.sprite $@
 
 SOUNDS = filesystem/sounds/button_press.wav64 \
          filesystem/sounds/shoot.wav64 \

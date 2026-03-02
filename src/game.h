@@ -3,6 +3,7 @@
 
 #include <libdragon.h>
 #include <stdbool.h>
+#include "maps.h"
 
 #define DEPTH_BUF_W       320
 #define MAX_LOCAL_PLAYERS 4
@@ -51,6 +52,9 @@ typedef struct {
     bool  is_sprinting;
     int   powerup_kind;  /* -1 = none, or powerup_kind_t */
     int   powerup_timer; /* frames remaining on active powerup */
+    bool  is_dead;       /* true while death screen is showing (waiting for A) */
+    float respawn_x;     /* pre-picked respawn position, applied when A pressed */
+    float respawn_y;
 } player_state_t;
 
 typedef struct {
@@ -64,16 +68,19 @@ typedef struct {
 typedef struct {
     float x, y;
     bool  active;
+    bool  is_dead;      /* true while showing death sprite before despawn */
+    int   death_timer;  /* frames remaining before fully removing (is_dead only) */
 } deer_t;
 
-extern player_state_t local_players[MAX_LOCAL_PLAYERS];
-extern int            num_local_players;
-extern const int      map[20][20];
-extern int            playerFov;
+extern player_state_t   local_players[MAX_LOCAL_PLAYERS];
+extern int              num_local_players;
+extern int              playerFov;
 extern deer_t         deer_enemies[NUM_DEER];
 extern bullet_t       bullets[MAX_BULLETS];
 extern powerup_t      powerups[MAX_POWERUPS];
 
+void set_map(int idx);
+void respawn_player(int p);
 void init_players(int count);
 void update_player(int idx, joypad_buttons_t btn, joypad_inputs_t inp);
 void update_deer(void);

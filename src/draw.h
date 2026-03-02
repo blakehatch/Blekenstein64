@@ -28,10 +28,15 @@ void castRays(surface_t *surf, float *depthBuf, sprite_t *wallTex,
 
 /* Billboard-render a deer/player sprite, depth-tested against depthBuf.
  * tint is multiplied with texture colour; use RGBA32(255,255,255,255) for
- * no tint (AI deer).  Player tints differentiate split-screen players. */
+ * no tint (AI deer).  Player tints differentiate split-screen players.
+ * v_offset: extra downward shift as a fraction of billboard height
+ *   (0 = centred at horizon, 0.5 = top edge at horizon / sits on ground).
+ * sprite_zbuf: optional per-column depth array updated with this sprite's
+ *   depth; used by drawPowerups for sprite-vs-powerup occlusion. */
 void drawDeerBillboard(surface_t *surf, const float *depthBuf,
                        const billboard_t *bb, color_t tint,
                        float deerX, float deerY, float targetJumpZ,
+                       float v_offset, float *sprite_zbuf,
                        int vpX, int vpY, int vpW, int vpH, int playerIdx);
 
 /* Draw the gun HUD sprite at the bottom of a viewport. */
@@ -51,14 +56,20 @@ void drawBullets(surface_t *surf, const float *depthBuf,
 /* Draw separator lines between split-screen viewports. */
 void drawViewportBorders(surface_t *surf, int numPlayers);
 
-/* Draw active world-space powerup pickups, depth-tested against depthBuf.
+/* Draw active world-space powerup pickups, depth-tested against depthBuf and
+ * sprite_zbuf (nearest billboard depth per column; may be NULL).
  * tick drives the bobbing animation. */
 void drawPowerups(surface_t *surf, const float *depthBuf,
+                  const float *sprite_zbuf,
                   int vpX, int vpY, int vpW, int vpH, int playerIdx,
                   uint32_t tick);
 
 /* Fix magenta/pink colorkey: clears alpha bit for hot-pink RGBA5551 pixels.
  * Call once after sprite_load() for any sprite with a painted background. */
 void fix_sprite_colorkey(sprite_t *spr);
+
+/* Variant for sprites with a white background: clears near-white pixels
+ * (all channels >= 28) in addition to the standard magenta key. */
+void fix_sprite_colorkey_white(sprite_t *spr);
 
 #endif /* DRAW_H */

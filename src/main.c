@@ -101,6 +101,78 @@ static void draw_menu(surface_t *disp, int sel, int connected, int tick) {
                        "UP/DOWN: select    A/START: confirm");
 }
 
+/* ---- Level select screen ----------------------------------------------- */
+static const char *map_labels[NUM_MAPS] = {
+    " CLASSIC  ", " CORRIDORS", "   MAZE   ", "  ARENA   "
+};
+static const char *map_descs[NUM_MAPS] = {
+    "Original map", "3-lane corridor", "Pillar maze", "Paintball arena"
+};
+
+static void draw_level_select(surface_t *disp, int sel, int tick) {
+    uint32_t bg    = graphics_make_color(  8,  8, 20, 255);
+    uint32_t bglo  = graphics_make_color( 12, 18, 40, 255);
+    uint32_t tbox  = graphics_make_color( 30, 26, 60, 255);
+    uint32_t tbord = graphics_make_color( 90, 60, 200, 255);
+    uint32_t gold  = graphics_make_color(255, 200, 40, 255);
+    uint32_t white = graphics_make_color(240, 240, 255, 255);
+    uint32_t dimgr = graphics_make_color(100, 100, 130, 255);
+
+    graphics_fill_screen(disp, bg);
+    graphics_draw_box(disp, 0, 120, SCREEN_W, 120, bglo);
+    graphics_draw_box(disp, 20, 8, SCREEN_W - 40, 50, tbox);
+    graphics_draw_box(disp, 18, 6, SCREEN_W - 36, 54, tbord);
+    graphics_draw_box(disp, 22, 10, 5, 46, gold);
+    graphics_draw_box(disp, SCREEN_W - 27, 10, 5, 46, gold);
+    graphics_set_color(gold, tbox);
+    graphics_draw_text(disp, 52, 17, "*** BLEKENSTEIN 64 ***");
+    graphics_set_color(white, tbox);
+    graphics_draw_text(disp, 96, 33, "  SELECT MAP  ");
+    graphics_set_color(dimgr, 0);
+    graphics_draw_text(disp, 96, 72, "SELECT MAP");
+    uint32_t sep = graphics_make_color(50, 45, 90, 255);
+    graphics_draw_box(disp, 60, 84, 200, 1, sep);
+
+    static const uint8_t MAP_R[NUM_MAPS] = {100, 60, 200, 220};
+    static const uint8_t MAP_G[NUM_MAPS] = {220, 180,  80, 100};
+    static const uint8_t MAP_B[NUM_MAPS] = { 60, 220,  60, 220};
+
+    int row_y0 = 92, row_h = 26, row_x = 54, row_w = 212;
+    for (int i = 0; i < NUM_MAPS; i++) {
+        int ry = row_y0 + i * row_h;
+        bool sel_row = (sel == i);
+        uint32_t slotC = graphics_make_color(MAP_R[i], MAP_G[i], MAP_B[i], 255);
+        if (sel_row) {
+            uint32_t hi  = graphics_make_color(40, 35, 80, 255);
+            uint32_t brd = (tick & 16)
+                ? slotC
+                : graphics_make_color(MAP_R[i]/2, MAP_G[i]/2, MAP_B[i]/2, 255);
+            graphics_draw_box(disp, row_x-2, ry-2, row_w+4, row_h+2, brd);
+            graphics_draw_box(disp, row_x, ry, row_w, row_h-2, hi);
+            graphics_draw_box(disp, row_x, ry, 4, row_h-2, slotC);
+            graphics_set_color(slotC, hi);
+            graphics_draw_text(disp, row_x + 12, ry + 4, map_labels[i]);
+            graphics_set_color(dimgr, hi);
+            graphics_draw_text(disp, row_x + 100, ry + 4, map_descs[i]);
+            graphics_set_color(gold, hi);
+            graphics_draw_text(disp, row_x + 194, ry + 8, "<");
+        } else {
+            graphics_draw_box(disp, row_x, ry, 3, row_h-2,
+                              graphics_make_color(MAP_R[i]/2, MAP_G[i]/2, MAP_B[i]/2, 255));
+            graphics_set_color(dimgr, bg);
+            graphics_draw_text(disp, row_x + 12, ry + 4, map_labels[i]);
+            graphics_set_color(graphics_make_color(70, 70, 90, 255), bg);
+            graphics_draw_text(disp, row_x + 100, ry + 4, map_descs[i]);
+        }
+    }
+
+    graphics_draw_box(disp, 0, SCREEN_H-16, SCREEN_W, 16,
+                      graphics_make_color(16, 14, 32, 255));
+    graphics_set_color(dimgr, graphics_make_color(16, 14, 32, 255));
+    graphics_draw_text(disp, 32, SCREEN_H-12,
+                       "UP/DOWN: select    A/START: confirm");
+}
+
 static int connected_count(void) {
     int n = 0;
     for (joypad_port_t p = JOYPAD_PORT_1; p < JOYPAD_PORT_COUNT; p++)
@@ -176,15 +248,18 @@ int main(void) {
     mixer_ch_set_vol(CH_MUSIC, 1.0f, 1.0f);
 
     /* ---- Load sprites ---- */
-    sprite_t *wall_tex = sprite_load("rom:/sprites/Tree_Wall_Texture.sprite");
-    sprite_t *deer_tex = sprite_load("rom:/sprites/Deer_Enemy_Sprite.sprite");
-    sprite_t *gun_idle = sprite_load("rom:/sprites/Rifle_GUI_Sprite.sprite");
-    sprite_t *gun_fire = sprite_load("rom:/sprites/Rifle_GUI_Sprite_Firing.sprite");
+    sprite_t *wall_tex       = sprite_load("rom:/sprites/Tree_Wall_Texture.sprite");
+    sprite_t *deer_tex       = sprite_load("rom:/sprites/Deer_Enemy_Sprite.sprite");
+    sprite_t *deer_death_tex = sprite_load("rom:/sprites/Deer_Enemy_Sprite_Death.sprite");
+    sprite_t *gun_idle       = sprite_load("rom:/sprites/Rifle_GUI_Sprite.sprite");
+    sprite_t *gun_fire       = sprite_load("rom:/sprites/Rifle_GUI_Sprite_Firing.sprite");
 
     fix_sprite_colorkey(deer_tex);
+    /* deer_death_tex has real PNG alpha — no colorkey needed */
     fix_sprite_colorkey(gun_idle);
     fix_sprite_colorkey(gun_fire);
-    billboard_t *deer_bb = billboard_create(deer_tex);
+    billboard_t *deer_bb       = billboard_create(deer_tex);
+    billboard_t *deer_death_bb = billboard_create(deer_death_tex);
 
     static const color_t DEER_TINT = {255, 255, 255, 255};
     static const color_t PLAYER_TINT[4] = {
@@ -246,10 +321,57 @@ restart_game:;
         display_show(disp);
     }
 
+    /* ---- Level select ---- */
+    int  map_sel      = 0;
+    bool map_confirmed = false;
+    debounce = 0;
+    int  map_tick = 0;
+
+    while (!map_confirmed) {
+        joypad_poll();
+
+        if (debounce > 0) {
+            debounce--;
+        } else {
+            for (joypad_port_t p = JOYPAD_PORT_1; p < JOYPAD_PORT_COUNT; p++) {
+                if (!joypad_is_connected(p)) continue;
+                joypad_buttons_t btn = joypad_get_buttons_pressed(p);
+                if (btn.d_up || btn.c_up) {
+                    if (map_sel > 0) { map_sel--; debounce = 8;
+                        wav64_play(&snd_btn, CH_BTN);
+                        mixer_ch_set_vol(CH_BTN, 0.7f, 0.7f); }
+                    break;
+                }
+                if (btn.d_down || btn.c_down) {
+                    if (map_sel < NUM_MAPS - 1) { map_sel++; debounce = 8;
+                        wav64_play(&snd_btn, CH_BTN);
+                        mixer_ch_set_vol(CH_BTN, 0.7f, 0.7f); }
+                    break;
+                }
+                if (btn.a || btn.start) { map_confirmed = true; break; }
+            }
+        }
+
+        if (audio_can_write()) {
+            short *buf = audio_write_begin();
+            mixer_poll(buf, audio_get_buffer_length());
+            audio_write_end();
+        }
+
+        surface_t *disp = display_get();
+        draw_level_select(disp, map_sel, map_tick++);
+        display_show(disp);
+    }
+    selected_map = map_sel;
+
     /* ---- Game setup ---- */
     init_players(num_players);
     float    depthBuf[DEPTH_BUF_W];
+    float    sprite_zbuf[DEPTH_BUF_W];
     uint32_t game_tick = 0;
+
+    /* Ticks per frame for 30 fps target (N64 CP0 COUNT = CPU_MHz/2 = 46,875,000 Hz) */
+    const uint32_t TICKS_PER_FRAME = (uint32_t)(TICKS_PER_SECOND / 60);
 
     /* Pause state */
     bool paused   = false;
@@ -257,7 +379,9 @@ restart_game:;
     int  pause_debounce = 0;
 
     /* ---- Game loop ---- */
+    uint32_t frame_start = TICKS_READ();
     while (1) {
+        frame_start = TICKS_READ();
         joypad_poll();
         game_tick++;
 
@@ -315,10 +439,14 @@ restart_game:;
         } else {
             /* ---- Normal game update ---- */
             for (int i = 0; i < num_local_players; i++) {
-                joypad_buttons_t btn =
-                    joypad_get_buttons_pressed((joypad_port_t)(JOYPAD_PORT_1 + i));
-                joypad_inputs_t inp =
-                    joypad_get_inputs((joypad_port_t)(JOYPAD_PORT_1 + i));
+                joypad_port_t port = (joypad_port_t)(JOYPAD_PORT_1 + i);
+                joypad_buttons_t btn = joypad_get_buttons_pressed(port);
+                if (local_players[i].is_dead) {
+                    /* On death screen: only A triggers respawn */
+                    if (btn.a) respawn_player(i);
+                    continue;
+                }
+                joypad_inputs_t inp = joypad_get_inputs(port);
                 update_player(i, btn, inp);
             }
 
@@ -351,25 +479,37 @@ restart_game:;
             vp_t vp = get_vp(i, num_local_players);
             castRays(disp, depthBuf, wall_tex, vp.x, vp.y, vp.w, vp.h, i);
 
+            /* Reset sprite depth buffer for this viewport */
+            for (int x = 0; x < vp.w; x++) sprite_zbuf[x] = 1e30f;
+
             if (num_local_players == 1) {
                 for (int d = 0; d < NUM_DEER; d++) {
                     if (!deer_enemies[d].active) continue;
-                    drawDeerBillboard(disp, depthBuf, deer_bb, DEER_TINT,
+                    const billboard_t *bb = deer_enemies[d].is_dead ? deer_death_bb : deer_bb;
+                    float voff = deer_enemies[d].is_dead ? 0.5f : 0.0f;
+                    /* Dead sprites lie on the ground — don't occlude powerups */
+                    float *zbuf = deer_enemies[d].is_dead ? NULL : sprite_zbuf;
+                    drawDeerBillboard(disp, depthBuf, bb, DEER_TINT,
                                       deer_enemies[d].x, deer_enemies[d].y, 0.0f,
+                                      voff, zbuf,
                                       vp.x, vp.y, vp.w, vp.h, i);
                 }
             }
 
             for (int j = 0; j < num_local_players; j++) {
                 if (j == i) continue;
-                drawDeerBillboard(disp, depthBuf, deer_bb, PLAYER_TINT[j],
+                const billboard_t *pbb = local_players[j].is_dead ? deer_death_bb : deer_bb;
+                float voff = local_players[j].is_dead ? 0.5f : 0.0f;
+                float *zbuf = local_players[j].is_dead ? NULL : sprite_zbuf;
+                drawDeerBillboard(disp, depthBuf, pbb, PLAYER_TINT[j],
                                   local_players[j].x, local_players[j].y,
                                   local_players[j].jump_z,
+                                  voff, zbuf,
                                   vp.x, vp.y, vp.w, vp.h, i);
             }
 
             drawBullets(disp, depthBuf, vp.x, vp.y, vp.w, vp.h, i);
-            drawPowerups(disp, depthBuf, vp.x, vp.y, vp.w, vp.h, i, game_tick);
+            drawPowerups(disp, depthBuf, sprite_zbuf, vp.x, vp.y, vp.w, vp.h, i, game_tick);
 
             drawGunHUD(disp, gun_idle, gun_fire,
                        local_players[i].is_firing,
@@ -378,7 +518,7 @@ restart_game:;
                        vp.x, vp.y, vp.w, vp.h);
 
             if (num_local_players == 1)
-                drawMiniMap(disp, map,
+                drawMiniMap(disp, current_map,
                             local_players[0].x, local_players[0].y,
                             local_players[0].angle,
                             6, 20, 20, SCREEN_W, SCREEN_H);
@@ -420,6 +560,24 @@ restart_game:;
             }
         }
 
+        /* Death screen overlays (CPU-drawn per dead player's viewport) */
+        for (int i = 0; i < num_local_players; i++) {
+            if (!local_players[i].is_dead) continue;
+            vp_t vp = get_vp(i, num_local_players);
+            int mx = vp.x + vp.w / 2;
+            int my = vp.y + vp.h / 2;
+            uint32_t d_border = graphics_make_color(200,  20,  20, 255);
+            uint32_t d_panel  = graphics_make_color( 50,   0,   0, 255);
+            uint32_t d_title  = graphics_make_color(255, 100, 100, 255);
+            uint32_t d_sub    = graphics_make_color(210, 210, 210, 255);
+            graphics_draw_box(disp, mx - 76, my - 22, 152, 44, d_border);
+            graphics_draw_box(disp, mx - 74, my - 20, 148, 40, d_panel);
+            graphics_set_color(d_title, d_panel);
+            graphics_draw_text(disp, mx - 32, my - 13, "YOU DIED");
+            graphics_set_color(d_sub, d_panel);
+            graphics_draw_text(disp, mx - 72, my + 3,  "PRESS A TO RESPAWN");
+        }
+
         /* Pause overlay (CPU-drawn on top) */
         if (paused)
             draw_pause(disp, pause_sel, (int)game_tick);
@@ -432,5 +590,8 @@ restart_game:;
             mixer_poll(buf, audio_get_buffer_length());
             audio_write_end();
         }
+
+        /* ---- Frame rate limiter: busy-wait to target 60 fps ---- */
+        while ((uint32_t)(TICKS_READ() - frame_start) < TICKS_PER_FRAME) { /* spin */ }
     }
 }

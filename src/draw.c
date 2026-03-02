@@ -38,6 +38,28 @@ void fix_sprite_colorkey(sprite_t *spr) {
     data_cache_hit_writeback(s.buffer, (unsigned long)s.height * s.stride);
 }
 
+/* Variant for sprites with a white background (e.g. Deer_Enemy_Sprite_Death).
+ * Clears alpha for near-white pixels (all channels >= 28/31) in addition to
+ * the standard magenta key.  Deer fur is tan (moderate G/B) and blood is red
+ * (low G, low B) so neither matches the white threshold. */
+void fix_sprite_colorkey_white(sprite_t *spr) {
+    surface_t s = sprite_get_pixels(spr);
+    for (int y = 0; y < (int)s.height; y++) {
+        uint16_t *row = (uint16_t *)((uint8_t *)s.buffer + (size_t)y * s.stride);
+        for (int x = 0; x < (int)s.width; x++) {
+            uint16_t px = row[x];
+            if (!(px & 1)) continue;
+            int r = (px >> 11) & 0x1F;
+            int g = (px >> 6)  & 0x1F;
+            int b = (px >> 1)  & 0x1F;
+            if ((r > 24 && b > 16 && g < 8) ||   /* magenta */
+                (r >= 28 && g >= 28 && b >= 28))  /* white   */
+                row[x] = px & ~(uint16_t)1;
+        }
+    }
+    data_cache_hit_writeback(s.buffer, (unsigned long)s.height * s.stride);
+}
+
 /* ------------------------------------------------------------------ */
 /* billboard_create / billboard_free                                    */
 /* ------------------------------------------------------------------ */
@@ -129,7 +151,7 @@ void castRays(surface_t *surf, float *depthBuf, sprite_t *wallTex,
             if (sdX < sdY) { sdX += ddX; mX += stepX; side = 0; }
             else           { sdY += ddY; mY += stepY; side = 1; }
             if (mX < 0 || mX >= 20 || mY < 0 || mY >= 20) break;
-            if (map[mY][mX] > 0) hit = 1;
+            if (current_map[mY][mX] > 0) hit = 1;
         }
 
         float dist;
@@ -172,6 +194,7 @@ void castRays(surface_t *surf, float *depthBuf, sprite_t *wallTex,
 void drawDeerBillboard(surface_t *surf, const float *depthBuf,
                        const billboard_t *bb, color_t tint,
                        float deerX, float deerY, float targetJumpZ,
+                       float v_offset, float *sprite_zbuf,
                        int vpX, int vpY, int vpW, int vpH, int playerIdx) {
     (void)surf;
 
@@ -200,7 +223,7 @@ void drawDeerBillboard(surface_t *surf, const float *depthBuf,
     if (sz <= 0) return;
 
     int hOff = cX - sz / 2;
-    int vOff = vpY + vpH / 2 + vshift - targetVShift - sz / 2;
+    int vOff = vpY + vpH / 2 + vshift - targetVShift - sz / 2 + (int)(v_offset * sz);
 
     rdpq_set_scissor(vpX, vpY, vpX + vpW, vpY + vpH);
     rdpq_set_mode_standard();
@@ -216,6 +239,10 @@ void drawDeerBillboard(surface_t *surf, const float *depthBuf,
 
         int di = sx - vpX;
         if (depthBuf[di] < depth) continue;   /* wall in front */
+
+        /* Record sprite depth so powerups behind this sprite are occluded. */
+        if (sprite_zbuf && depth < sprite_zbuf[di])
+            sprite_zbuf[di] = depth;
 
         int tX = c * bb->texW / sz;
         if (tX >= bb->texW) tX = bb->texW - 1;
@@ -426,6 +453,7 @@ static void draw_pu_spread(int bx, int by, int sz) {
 }
 
 void drawPowerups(surface_t *surf, const float *depthBuf,
+                  const float *sprite_zbuf,
                   int vpX, int vpY, int vpW, int vpH, int playerIdx,
                   uint32_t tick) {
     (void)surf;
@@ -460,7 +488,10 @@ void drawPowerups(surface_t *surf, const float *depthBuf,
         int cX = vpX + (int)((0.5f + rel / fovR) * (float)vpW);
         int di = cX - vpX;
         if (di < 0 || di >= vpW) continue;
-        if (depthBuf[di] < depth) continue;   /* wall is closer */
+        /* Depth-test against walls and sprites */
+        float nearest = depthBuf[di];
+        if (sprite_zbuf && sprite_zbuf[di] < nearest) nearest = sprite_zbuf[di];
+        if (nearest < depth) continue;
 
         int sz = (int)((float)vpH / depth * 0.25f);
         if (sz < 6)  sz = 6;
