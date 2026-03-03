@@ -103,10 +103,10 @@ static void draw_menu(surface_t *disp, int sel, int connected, int tick) {
 
 /* ---- Level select screen ----------------------------------------------- */
 static const char *map_labels[NUM_MAPS] = {
-    " CLASSIC  ", " CORRIDORS", "   MAZE   ", "  ARENA   "
+    " CLASSIC  ", " CORRIDORS", "   MAZE   ", "  ARENA   ", "  CROSS   "
 };
 static const char *map_descs[NUM_MAPS] = {
-    "Original map", "3-lane corridor", "Pillar maze", "Paintball arena"
+    "Original map", "3-lane corridor", "Pillar maze", "Paintball arena", "Cross-shaped arena"
 };
 
 static void draw_level_select(surface_t *disp, int sel, int tick) {
@@ -133,9 +133,9 @@ static void draw_level_select(surface_t *disp, int sel, int tick) {
     uint32_t sep = graphics_make_color(50, 45, 90, 255);
     graphics_draw_box(disp, 60, 84, 200, 1, sep);
 
-    static const uint8_t MAP_R[NUM_MAPS] = {100, 60, 200, 220};
-    static const uint8_t MAP_G[NUM_MAPS] = {220, 180,  80, 100};
-    static const uint8_t MAP_B[NUM_MAPS] = { 60, 220,  60, 220};
+    static const uint8_t MAP_R[NUM_MAPS] = {100, 60, 200, 220, 180};
+    static const uint8_t MAP_G[NUM_MAPS] = {220, 180,  80, 100, 220};
+    static const uint8_t MAP_B[NUM_MAPS] = { 60, 220,  60, 220,  60};
 
     int row_y0 = 92, row_h = 26, row_x = 54, row_w = 212;
     for (int i = 0; i < NUM_MAPS; i++) {
